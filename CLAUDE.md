@@ -19,7 +19,8 @@
   - capitalized entries (proper nouns, titles like Mme/Dr),
   - entries whose tags contain `;S` (abbreviations/symbols, e.g. kcal, mmol — some are lowercase),
   - entries tagged `:Zp` or `:Zs` (prefixes/suffixes).
-- Counted: in Lexique 4.1 (data/raw/Lexique4.1.tsv) with an allowed tense AND frequency ≥ cutoff (to be set).
+- Counted: in Lexique 4.1 (data/raw/Lexique4.1.tsv) with an allowed tense AND frequency ≥ 0.5 (`11_FreqOrtho`, ≈ occurrences per million words).
+- Crude/vulgar words are kept: no blocklist.
 - Frequency = column `11_FreqOrtho` (frequency of the spelling across all its rows/POS). A word appearing on several Lexique rows has one frequency, not a sum or max of `10_FreqMot`.
 - Allowed tenses: inf, par:p / par:pre (present participle; Lexique 4.1 mostly writes `par:p`), par:pas, ind:pre, ind:imp, ind:fut, cnd:pre, sub:pre, imp:pre.
 - Excluded tenses: ind:pas (passé simple), sub:imp (imperfect subjunctive).
