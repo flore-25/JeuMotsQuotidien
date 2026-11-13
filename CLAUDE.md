@@ -9,6 +9,7 @@
 ## Spelling rules
 - Accents are part of the spelling: pêche, pèche and péché are 3 different words. "eleve" is not a word.
 - A puzzle letter covers its accented forms (E → e é è ê ë). The bitmask is computed from the unaccented letters.
+- Allow S, but never as the central letter. Limit how often S appears (once every 10 game, maximum)
 - œ is written "oe" and æ is written "ae" (stored that way and typed that way).
 - Always normalize to Unicode NFC.
 - Excluded: proper nouns (capitalized), hyphens, apostrophes, spaces, digits.
