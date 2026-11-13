@@ -4,7 +4,7 @@
 - 7 distinct base letters (a–z). One central letter, among the 12 most frequent letters (computed from the counted words).
 - The 6 other letters: exactly 2 vowels + 4 consonants. Vowels = a e i o u y.
 - Valid word: ≥ 4 letters, contains the central letter, uses only the 7 letters (repeats allowed).
-- Target: 15 to 125 counted words per puzzle, and at least 1 pangram.
+- Target: 15 to 125 counted words per puzzle, and at least 1 pangram (word containing each 7 letters at least once).
 
 ## Spelling rules
 - Accents are part of the spelling: pêche, pèche and péché are 3 different words. "eleve" is not a word.
