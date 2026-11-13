@@ -1,0 +1,17 @@
+{
+  "name": "jeu-mots-quotidien",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Jeu de lettres quotidien en français",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  }
+}

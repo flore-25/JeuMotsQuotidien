@@ -15,11 +15,23 @@
 - Excluded: proper nouns (capitalized), hyphens, apostrophes, spaces, digits.
 
 ## Word tiers
-- Accepted: every word in Grammalecte (all spelling variants).
-- Counted: in Lexique 3.83 with an allowed tense AND frequency ≥ cutoff (to be set).
-- Allowed tenses: inf, par:pre, par:pas, ind:pre, ind:imp, ind:fut, cnd:pre, sub:pre, imp:pre.
+- Accepted: every word in Grammalecte (data/raw/French.lex, all spelling variants), except:
+  - capitalized entries (proper nouns, titles like Mme/Dr),
+  - entries whose tags contain `;S` (abbreviations/symbols, e.g. kcal, mmol — some are lowercase),
+  - entries tagged `:Zp` or `:Zs` (prefixes/suffixes).
+- Counted: in Lexique 4.1 (data/raw/Lexique4.1.tsv) with an allowed tense AND frequency ≥ cutoff (to be set).
+- Frequency = column `11_FreqOrtho` (frequency of the spelling across all its rows/POS). A word appearing on several Lexique rows has one frequency, not a sum or max of `10_FreqMot`.
+- Allowed tenses: inf, par:p / par:pre (present participle; Lexique 4.1 mostly writes `par:p`), par:pas, ind:pre, ind:imp, ind:fut, cnd:pre, sub:pre, imp:pre.
 - Excluded tenses: ind:pas (passé simple), sub:imp (imperfect subjunctive).
+- Tense check applies to rows with `9_InfoVER` non-empty (verbs); non-verb rows (NOM, ADJ, ADV…) have empty InfoVER and are allowed.
+- A word with several Lexique rows counts if at least one of its rows passes the tense check (e.g. a NOM row passes even if the same spelling's VER row is ind:pas only).
+- `9_InfoVER` is a comma-separated list of `mood:tense[:person]`; compare only the first two parts (formats vary: `inf`, `par:p`, `par:pas:`, `ind:pre:3s`).
+
+## Source data quirks
+- French.lex: 3 tab-separated columns (form, lemma, tags), no header; skip `#` comments and blank lines. Tags: `:POS…;LEX#SEM/DIC`.
+- Lexique4.1.tsv: 37 columns with header. Row `feeder` is shifted by 2 columns (corrupt) — don't trust its fields.
+- Both files are UTF-8, no BOM, LF. Lexique already writes œ as "oe" but 12 words still contain æ; Grammalecte contains both œ and oe forms.
 
 ## Code
-- TypeScript, Node 20. src/normalize.ts is the only source of normalization.
+- TypeScript, Node 24 (runs .ts files directly via native type stripping; `npm run typecheck` for types). src/normalize.ts is the only source of normalization.
 - Never modify data/raw/.
