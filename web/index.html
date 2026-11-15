@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Jeu de lettres</title>
+    <link rel="stylesheet" href="/web/style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <button id="prev" class="nav" aria-label="Puzzle précédent">‹</button>
+        <select id="picker" aria-label="Choisir un puzzle"></select>
+        <button id="next" class="nav" aria-label="Puzzle suivant">›</button>
+      </header>
+
+      <section class="progress">
+        <div class="progress-text"><span id="count">0 / 0</span> mots <span id="pangram-status"></span></div>
+        <div class="bar"><div id="bar-fill"></div></div>
+      </section>
+
+      <div id="word" class="word" aria-live="polite"></div>
+      <div id="message" class="message" aria-live="polite"></div>
+
+      <div id="wheel" class="wheel"></div>
+      <p class="hint">Appui long sur une lettre pour les accents</p>
+
+      <div class="actions">
+        <button id="delete">Effacer</button>
+        <button id="shuffle" aria-label="Mélanger">⟳</button>
+        <button id="submit" class="primary">Valider</button>
+      </div>
+
+      <section>
+        <h2>Mots trouvés</h2>
+        <ul id="found" class="chips"></ul>
+        <h2>Mots bonus <small>(acceptés, non comptés)</small></h2>
+        <ul id="bonus" class="chips"></ul>
+      </section>
+
+      <details id="solutions">
+        <summary>Solutions (test)</summary>
+        <ul id="solution-list" class="chips"></ul>
+        <p id="bonus-count" class="muted"></p>
+        <button id="reset" class="link">Recommencer ce puzzle</button>
+      </details>
+    </main>
+
+    <div id="accents" class="accents" hidden></div>
+    <script type="module" src="/web/app.ts"></script>
+  </body>
+</html>
