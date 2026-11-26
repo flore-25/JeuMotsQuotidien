@@ -3,19 +3,21 @@
  *
  *   npm run dev   →   http://localhost:5173
  *
- * Serves web/, src/ (TypeScript stripped to JavaScript on the fly, so the page uses
+ * Serves web/, branding/, src/ (TypeScript stripped to JavaScript on the fly, so the page uses
  * the same src/normalize.ts as the build) and data/out/puzzles.json.
+ * Supabase settings come from .env.local (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY), see README.
  */
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { join, resolve, extname, sep } from 'node:path';
 import { stripTypeScriptTypes } from 'node:module';
+import { fillConfig } from './site-config.ts';
 
 const ROOT = join(import.meta.dirname, '..');
 const PORT = Number(process.env.PORT ?? 5173);
 
-const SERVED_DIRS = ['web', 'src'];
+const SERVED_DIRS = ['web', 'src', 'branding'];
 const FIXED: Record<string, string> = {
   '/': 'web/index.html',
   '/data/puzzles.json': 'data/out/puzzles.json',
@@ -51,6 +53,7 @@ const server = createServer(async (req, res) => {
   try {
     let body: string | Buffer = await readFile(file);
     if (file.endsWith('.ts')) body = stripTypeScriptTypes(body.toString('utf8'));
+    if (urlPath === '/') body = fillConfig(body.toString('utf8'));
     res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' }).end(body);
   } catch {
     const hint = urlPath === '/data/puzzles.json' ? ' (run `npm run build:words && npm run puzzles`)' : '';
@@ -65,4 +68,7 @@ server.on('error', (err: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
-server.listen(PORT, () => console.log(`Jeu de lettres: http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`énigmot: http://localhost:${PORT}`);
+  if (!process.env.SUPABASE_URL) console.warn('SUPABASE_URL is not set: sign-in is disabled (create .env.local, see README).');
+});

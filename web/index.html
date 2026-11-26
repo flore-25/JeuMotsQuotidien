@@ -3,50 +3,131 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-    <title>Jeu de lettres</title>
+    <title>énigmot</title>
+    <meta name="theme-color" content="#f7eadc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#191613" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/svg+xml" href="/branding/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,600..900,100&family=Rubik:wght@400;500;700;900&display=swap"
+    />
     <link rel="stylesheet" href="/web/style.css" />
+    <!-- Filled in by the dev server and the build from SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY (public values). -->
+    <meta name="supabase-url" content="%SUPABASE_URL%" />
+    <meta name="supabase-key" content="%SUPABASE_PUBLISHABLE_KEY%" />
+    <script type="importmap">
+      { "imports": { "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm" } }
+    </script>
   </head>
   <body>
-    <main>
-      <header>
-        <button id="prev" class="nav" aria-label="Puzzle précédent">‹</button>
-        <select id="picker" aria-label="Choisir un puzzle"></select>
-        <button id="next" class="nav" aria-label="Puzzle suivant">›</button>
+    <main id="auth" class="auth" hidden>
+      <h1 class="logo"><img src="/branding/logo-color.svg" alt="énigmot" /></h1>
+      <p class="tagline">Le jeu de lettres quotidien</p>
+
+      <section class="card auth-card">
+        <h2 id="auth-title">Connexion</h2>
+
+        <div id="auth-social">
+          <button id="auth-google" type="button" class="btn google">
+            <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+            Continuer avec Google
+          </button>
+          <div class="divider"><span>ou</span></div>
+        </div>
+
+        <form id="auth-form" novalidate>
+          <label id="auth-email-row" class="field">
+            <span>Courriel</span>
+            <input id="auth-email" type="email" autocomplete="email" inputmode="email" required />
+          </label>
+          <label id="auth-password-row" class="field">
+            <span id="auth-password-label">Mot de passe</span>
+            <input id="auth-password" type="password" autocomplete="current-password" minlength="6" required />
+          </label>
+          <button id="auth-forgot" type="button" class="link small">Mot de passe oublié ?</button>
+          <button id="auth-submit" type="submit" class="btn primary wide">Se connecter</button>
+        </form>
+
+        <p id="auth-note" class="auth-note" aria-live="polite"></p>
+        <p id="auth-switch" class="auth-switch">
+          <span id="auth-switch-text">Pas encore de compte ?</span>
+          <button id="auth-switch-link" type="button" class="link">Créer un compte</button>
+        </p>
+      </section>
+    </main>
+
+    <main id="game" hidden>
+      <header class="brand">
+        <h1 class="logo"><img src="/branding/logo-color.svg" alt="énigmot" /></h1>
+        <button id="sound" class="icon-btn" aria-label="Couper le son" aria-pressed="true"></button>
+        <details class="account">
+          <summary class="icon-btn" aria-label="Mon compte">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="4" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4.5 20.5c1.2-4 4.2-6 7.5-6s6.3 2 7.5 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </summary>
+          <div class="account-menu card">
+            <span id="account-email" class="account-email"></span>
+            <button id="signout" class="btn">Se déconnecter</button>
+          </div>
+        </details>
       </header>
 
-      <section class="progress">
-        <div class="progress-text"><span id="count">0 / 0</span> mots <span id="pangram-status"></span></div>
+      <nav class="puzzle-nav">
+        <button id="prev" class="icon-btn" aria-label="Puzzle précédent">‹</button>
+        <select id="picker" aria-label="Choisir un puzzle"></select>
+        <button id="next" class="icon-btn" aria-label="Puzzle suivant">›</button>
+      </nav>
+
+      <section class="progress card">
+        <div class="progress-text">
+          <span><strong id="count">0</strong> mots</span>
+          <span id="points" class="points">0 pts</span>
+        </div>
         <div class="bar"><div id="bar-fill"></div></div>
+        <div class="progress-sub"><span id="goal"></span><span id="pangram-status"></span></div>
       </section>
 
+      <section id="family-panel" class="family-panel card" aria-live="polite" hidden></section>
+
       <div id="word" class="word" aria-live="polite"></div>
-      <div id="message" class="message" aria-live="polite"></div>
+      <div class="message-row"><div id="message" class="message" aria-live="polite"></div></div>
 
       <div id="wheel" class="wheel"></div>
       <p class="hint">Appui long sur une lettre pour les accents</p>
 
       <div class="actions">
-        <button id="delete">Effacer</button>
-        <button id="shuffle" aria-label="Mélanger">⟳</button>
-        <button id="submit" class="primary">Valider</button>
+        <button id="delete" class="btn">Effacer</button>
+        <button id="shuffle" class="btn round" aria-label="Mélanger">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h11l-3-3M20 17H9l3 3M18 7a6 6 0 0 1 1 7M6 17a6 6 0 0 1-1-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="submit" class="btn primary">Valider</button>
       </div>
 
       <section>
         <h2>Mots trouvés</h2>
         <ul id="found" class="chips"></ul>
-        <h2>Mots bonus <small>(acceptés, non comptés)</small></h2>
-        <ul id="bonus" class="chips"></ul>
       </section>
 
       <details id="solutions">
         <summary>Solutions (test)</summary>
-        <ul id="solution-list" class="chips"></ul>
-        <p id="bonus-count" class="muted"></p>
+        <h2>Objectifs</h2>
+        <ul id="solution-goals" class="families"></ul>
+        <h2>Autres familles (extras)</h2>
+        <ul id="solution-extras" class="families"></ul>
         <button id="reset" class="link">Recommencer ce puzzle</button>
       </details>
     </main>
 
     <div id="accents" class="accents" hidden></div>
+    <div id="celebration" class="celebration" aria-live="assertive" hidden>
+      <div class="badge">
+        <span class="badge-title">Pangramme&nbsp;!</span>
+        <span id="celebration-word" class="badge-word"></span>
+        <span id="celebration-points" class="badge-points"></span>
+      </div>
+    </div>
+    <canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
     <script type="module" src="/web/app.ts"></script>
   </body>
 </html>

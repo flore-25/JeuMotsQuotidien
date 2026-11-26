@@ -4,3 +4,9 @@ node_modules/
 data/out/*
 !data/out/report.md
 **/.DS_Store
+
+# local secrets / build output
+.env.local
+.env*.local
+dist/
+.vercel/
