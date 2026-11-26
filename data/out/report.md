@@ -5,11 +5,13 @@ Regenerate after changing the rules or the cutoff; do not edit by hand.
 
 ## Summary
 
-- **Accepted words** (Grammalecte, typed by the player and recognized): **450 553**
-- **Counted words** (Lexique 4.1, allowed tense, `11_FreqOrtho` ≥ 0.5, also in Grammalecte): **27 676**
+- **Accepted words** (Grammalecte, typed by the player and recognized): **443 253**
+- **Counted words** (also in Grammalecte; Lexique 4.1, allowed tense, `11_FreqOrtho` ≥ 0.5): **27 676**
+- **Families** (Grammalecte lemmas): 68 169; accepted words that are verb forms: 314 691
 - Counted words with ≤ 7 distinct letters (usable in a puzzle): 21 517
 - Counted words with exactly 7 distinct letters (possible pangrams): 5 975
 - Frequency cutoff: **0.5** (`11_FreqOrtho`, ≈ occurrences per million words). Crude words are kept (no blocklist).
+- Every accepted word is valid for the player. Counted words decide which families are goals of a puzzle.
 
 ## Source files
 
@@ -27,13 +29,14 @@ participle `par:p` (`par:pre` appears only twice); `9_InfoVER` codes are compare
 | --- | ---: |
 | comment / blank lines (skipped) | 8 |
 | entries | 513 295 |
-| dropped: < 4 letters | 899 |
-| duplicate (same word, other tags) | 38 307 |
+| dropped: < 4 letters | 883 |
+| duplicate (same word, other tags: merged) | 38 302 |
 | dropped: `;S` abbreviation | 277 |
 | dropped: capitalized (proper nouns, titles) | 11 410 |
 | dropped: `:Zp`/`:Zs` prefix/suffix | 33 |
-| dropped: invalid form (hyphen, apostrophe, digit, foreign letter…) | 11 816 |
-| **accepted words** | 450 553 |
+| dropped: invalid form (hyphen, apostrophe, digit, foreign letter…) | 11 769 |
+| dropped: `1ś` inverted form (gelè-je) | 7 368 |
+| **accepted words** | 443 253 |
 
 ## Counted words — Lexique 4.1
 
@@ -48,20 +51,28 @@ participle `par:p` (`par:pre` appears only twice); `9_InfoVER` codes are compare
 | 11_FreqOrtho mismatches after merging (kept max) | 7 |
 | **distinct words** | 164 312 |
 | words with no row passing the tense check | 5 733 |
+| lemmas with a frequency (12_FreqLemme) | 65 158 |
 
 Words passing the tense check: 158 579, of which
-**12 017 are not in Grammalecte** and are therefore excluded (counted ⊂ accepted).
-Examples: repieute, checkais, call, model, nippo, engatse, cavatelli, alimentairement, nullitude, révérent, biomécanicien, secco, babacools, retraçables, ammi, chevres, refléchie, remanifestent, réaffronter, shama.
+**12 105 are not in Grammalecte** and are therefore excluded (counted ⊂ accepted).
+Examples: repieute, checkais, réglè, call, model, nippo, engatse, cavatelli, alimentairement, nullitude, révérent, biomécanicien, secco, babacools, retraçables, ammi, chevres, refléchie, remanifestent, réaffronter.
+
+## Families
+
+Each word belongs to the families of its Grammalecte lemmas: gueules → gueule, attaquait → attaquer,
+aura → aura and avoir. A puzzle's goal families are those with at least one counted word whose lemma
+is frequent too (Lexique `12_FreqLemme` ≥ 0.5, so "cavité" doesn't make the verb "caviter" a goal);
+any form finds its family. Verb forms keep their tense codes (mood + person) for the conjugation panel.
 
 ## Frequency cutoff
 
-A word is counted only if its `11_FreqOrtho` is at least the cutoff. Rarer words are still accepted
-when typed, but are not part of the puzzle's official list.
+A word is counted if its `11_FreqOrtho` is at least the cutoff. Rarer words are still valid when typed;
+"counted" only decides which families are goals.
 
-| Cutoff | Counted words | ≤ 7 distinct letters | Exactly 7 (pangram-capable) |
+| Form cutoff | Counted words | ≤ 7 distinct letters | Exactly 7 (pangram-capable) |
 | --- | ---: | ---: | ---: |
-| 0 | 146 562 | 85 805 | 34 442 |
-| 0.1 | 53 312 | 38 180 | 12 413 |
+| 0 | 146 474 | 85 723 | 34 436 |
+| 0.1 | 53 309 | 38 177 | 12 413 |
 | **0.5** (current) | 27 676 | 21 517 | 5 975 |
 | 1 | 19 467 | 15 685 | 4 068 |
 | 2 | 13 058 | 10 946 | 2 578 |
@@ -71,8 +82,8 @@ Sample words (6+ letters) by frequency band:
 
 | 11_FreqOrtho | Examples |
 | --- | --- |
-| 0 – 0.1 | abandonnions (0.098), congères (0.054), intentés (0.032), laideurs (0.019), scarifiait (0.013), consommeras (0.006), artésienne (0.003), inhérence (0.003) |
-| 0.1 – 0.5 | aplati (0.497), organiste (0.392), surligné (0.313), galion (0.253), surfers (0.209), gélatineux (0.171), légués (0.142), académicien (0.117) |
+| 0 – 0.1 | abandonnions (0.098), confondrais (0.054), inspecterai (0.032), keffieh (0.019), savater (0.013), consentirons (0.006), arrobas (0.003), ingurgitera (0.003) |
+| 0.1 – 0.5 | aplati (0.497), optimal (0.392), suiveurs (0.313), frustrante (0.253), supportée (0.209), garnir (0.171), jurera (0.142), académicien (0.117) |
 | 0.5 – 1 | adorons (0.997), inférieures (0.905), déménagez (0.823), recruteurs (0.753), vantait (0.69), inonde (0.633), décrivant (0.582), impala (0.538) |
 | 1 – 2 | éclaireur (1.997), plongeur (1.807), indestructible (1.646), égorger (1.5), étirer (1.367), combattent (1.263), bouleversant (1.168), tireront (1.085) |
 | 2 – 5 | décolle (4.997), squelette (4.364), reparler (3.829), rendant (3.396), cavernes (3.028), poursuivent (2.706), valide (2.43), manqueras (2.19) |
@@ -117,30 +128,39 @@ Number of counted words containing each letter (at cutoff 0.5).
 
 ## Spot checks
 
-| Word | Accepted | Counted | 11_FreqOrtho |
-| --- | --- | --- | --- |
-| parlèrent | ✅ | ❌ | — |
-| parlâmes | ✅ | ❌ | — |
-| eussent | ✅ | ❌ | — |
-| parlant | ✅ | ✅ | 32.006 |
-| coeur | ✅ | ✅ | 273.44 |
-| oeuvre | ✅ | ✅ | 29.421 |
-| caecum | ✅ | ❌ | 0.022 |
-| élève | ✅ | ✅ | 21.446 |
-| eleve | ❌ | ❌ | — |
-| kcal | ❌ | ❌ | — |
-| mmol | ❌ | ❌ | — |
-| paris | ✅ | ✅ | 69.016 |
-| pêche | ✅ | ✅ | 21.5 |
-| pèche | ✅ | ✅ | 0.516 |
-| péché | ✅ | ✅ | 16.772 |
+| Word | Accepted | Counted | 11_FreqOrtho | Families (tenses) |
+| --- | --- | --- | --- | --- |
+| parlèrent | ✅ | ❌ | — | parler (Is) |
+| parlâmes | ✅ | ❌ | — | parler (Is:1p) |
+| eussent | ✅ | ❌ | — | avoir (Sq:3p) |
+| parlant | ✅ | ✅ | 32.006 | parler (P), parlant |
+| coeur | ✅ | ✅ | 273.44 | coeur |
+| oeuvre | ✅ | ✅ | 29.421 | oeuvre, oeuvrer (Ip:1s Ip:3s Sp:1s Sp:3s E:2s) |
+| caecum | ✅ | ❌ | 0.022 | caecum |
+| élève | ✅ | ✅ | 21.446 | élève, élever (Ip:1s Ip:3s Sp:1s Sp:3s E:2s) |
+| eleve | ❌ | ❌ | — | — |
+| kcal | ❌ | ❌ | — | — |
+| mmol | ❌ | ❌ | — | — |
+| paris | ✅ | ✅ | 69.016 | pari |
+| pêche | ✅ | ✅ | 21.5 | pêche, pêcher (Ip:1s Ip:3s Sp:1s Sp:3s E:2s) |
+| pèche | ✅ | ✅ | 0.516 | pécher (Ip:1s Ip:3s Sp:1s Sp:3s E:2s) |
+| péché | ✅ | ✅ | 16.772 | pécher (Q), péché |
+| gelè | ❌ | ❌ | — | — |
+| longè | ❌ | ❌ | — | — |
+| osons | ✅ | ❌ | 0.231 | oser (Ip:1p E:1p) |
+| imitait | ✅ | ❌ | 0.291 | imiter (Iq:3s) |
+| donné | ✅ | ✅ | 259.282 | donner (Q) |
+| connaîtra | ✅ | ✅ | 2.402 | connaître (If:3s) |
+| connaitra | ✅ | ❌ | 0.332 | connaitre (If:3s) |
+| commanda | ✅ | ❌ | — | commander (Is:3s) |
 
 ## Output files
 
 | File | Content |
 | --- | --- |
-| `accepted.json` | 450 553 × `{word, mask}`, sorted alphabetically |
+| `accepted.json` | 443 253 × `{word, mask, families}` (families: lemma → tense codes), sorted alphabetically |
 | `counted.json` | 27 676 × `{word, freq, mask}`, sorted by frequency |
+| `lemma-freq.json` | Lexique `12_FreqLemme` per lemma (max over its rows) |
 | `letter-freq.json` | counted words containing each letter, sorted |
 | `report.md` | this report |
 
