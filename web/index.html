@@ -7,6 +7,10 @@
     <meta name="theme-color" content="#f7eadc" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#191613" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/branding/favicon.svg" />
+    <!-- PNG versions: Safari (no SVG icons) and Android. -->
+    <link rel="icon" type="image/png" href="/branding/favicon-32.png" />
+    <link rel="icon" type="image/png" href="/branding/icon-192.png" />
+    <link rel="apple-touch-icon" href="/branding/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -23,7 +27,12 @@
   </head>
   <body>
     <main id="auth" class="auth" hidden>
-      <h1 class="logo"><img src="/branding/logo-color.svg" alt="énigmot" /></h1>
+      <h1 class="logo">
+          <picture>
+            <source srcset="/branding/white-darkmode.svg" media="(prefers-color-scheme: dark)" />
+            <img src="/branding/logo-color.svg" alt="énigmot" />
+          </picture>
+        </h1>
       <p class="tagline">Le jeu de lettres quotidien</p>
 
       <section class="card auth-card">
@@ -60,7 +69,12 @@
 
     <main id="game" hidden>
       <header class="brand">
-        <h1 class="logo"><img src="/branding/logo-color.svg" alt="énigmot" /></h1>
+        <h1 class="logo">
+          <picture>
+            <source srcset="/branding/white-darkmode.svg" media="(prefers-color-scheme: dark)" />
+            <img src="/branding/logo-color.svg" alt="énigmot" />
+          </picture>
+        </h1>
         <button id="sound" class="icon-btn" aria-label="Couper le son" aria-pressed="true"></button>
         <details class="account">
           <summary class="icon-btn" aria-label="Mon compte">
@@ -79,6 +93,15 @@
         <button id="next" class="icon-btn" aria-label="Puzzle suivant">›</button>
       </nav>
 
+      <div id="new-day" class="new-day card" hidden>
+        <span>Un nouveau puzzle est sorti&nbsp;!</span>
+        <button id="new-day-btn" class="btn small primary">Jouer</button>
+      </div>
+
+      <div class="reveal-bar">
+        <button id="reveal" class="btn small">Révéler la solution</button>
+      </div>
+
       <section class="progress card">
         <div class="progress-text">
           <span><strong id="count">0</strong> mots</span>
@@ -92,14 +115,19 @@
 
       <div id="word" class="word" aria-live="polite"></div>
       <div class="message-row"><div id="message" class="message" aria-live="polite"></div></div>
+      <div id="hint-card" class="hint-card" aria-live="polite" hidden></div>
 
       <div id="wheel" class="wheel"></div>
-      <p class="hint">Appui long sur une lettre pour les accents</p>
+      <p class="hint">Appui longtemps sur une lettre pour les accents</p>
 
       <div class="actions">
         <button id="delete" class="btn">Effacer</button>
         <button id="shuffle" class="btn round" aria-label="Mélanger">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h11l-3-3M20 17H9l3 3M18 7a6 6 0 0 1 1 7M6 17a6 6 0 0 1-1-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="hint-btn" class="btn round hint-btn" aria-label="Indice" disabled>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="hint-timer"></span>
         </button>
         <button id="submit" class="btn primary">Valider</button>
       </div>
@@ -109,15 +137,27 @@
         <ul id="found" class="chips"></ul>
       </section>
 
-      <details id="solutions">
-        <summary>Solutions (test)</summary>
-        <h2>Objectifs</h2>
-        <ul id="solution-goals" class="families"></ul>
-        <h2>Autres familles (extras)</h2>
-        <ul id="solution-extras" class="families"></ul>
-        <button id="reset" class="link">Recommencer ce puzzle</button>
-      </details>
+      <section id="solutions" class="reveal" hidden>
+        <div>
+          <h2>Objectifs</h2>
+          <ul id="solution-goals" class="families"></ul>
+          <h2>Autres familles (extras)</h2>
+          <ul id="solution-extras" class="families"></ul>
+          <button id="reset" class="link">Recommencer ce puzzle</button>
+        </div>
+      </section>
     </main>
+
+    <dialog id="confirm-reveal" class="dialog card" aria-labelledby="confirm-title">
+      <form method="dialog">
+        <h2 id="confirm-title">Révéler la solution ?</h2>
+        <p>Tous les mots de ce puzzle seront affichés. Vous pourrez continuer à jouer, mais la surprise sera gâchée&nbsp;!</p>
+        <div class="dialog-actions">
+          <button value="cancel" class="btn" autofocus>Annuler</button>
+          <button value="ok" class="btn danger">Révéler</button>
+        </div>
+      </form>
+    </dialog>
 
     <div id="accents" class="accents" hidden></div>
     <div id="celebration" class="celebration" aria-live="assertive" hidden>

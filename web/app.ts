@@ -1,5 +1,11 @@
 /**
- * Test interface for the generated puzzles (data/out/puzzles.json).
+ * énigmot: one puzzle a day. A new puzzle appears at the player's local midnight; past
+ * puzzles stay playable.
+ *
+ * The page never has the solutions: it gets the letters and counts from the server, sends each
+ * word to submit_word() (which checks and saves it), and only sees the families of the words
+ * the player found (other forms masked as lengths). See web/cloud.ts.
+ *
  * Tap a letter to add it; long-press a letter for its accented forms
  * (hold, slide onto the accent and release, or release then tap).
  * Physical keyboard: letters, Backspace, Enter.
@@ -12,23 +18,12 @@
 import { normalize, stripAccents } from '../src/normalize.ts';
 import { requireUser, signOut } from './auth.ts';
 import { celebratePangram } from './celebrate.ts';
-import { loadProgress, resetProgress, saveProgress } from './cloud.ts';
+import { Hints } from './hints.ts';
+import {
+  flush, getHint, getPuzzle, listDays, resetProgress, revealSolution, savePoints, submitWord,
+  type Day, type Family, type Form, type PuzzleState, type Solution, type SubmitResult,
+} from './cloud.ts';
 import { playMiss, playPangram, playWord, setSoundEnabled, soundEnabled } from './sound.ts';
-
-type Family = {
-  lemma: string;
-  goal: boolean;
-  forms: string[];
-  tenses?: Record<string, string[]>; // verb families: form → tense codes ("Ip:1s", "Q"…)
-};
-type Puzzle = {
-  letters: string[]; // central first
-  central: string;
-  words: string[]; // every valid word
-  pangrams: string[];
-  families: Family[];
-};
-type Progress = { found: string[]; points?: number; bonus?: string[] /* older saves */ };
 
 /** French accented forms per base letter (same set as isValidForm in normalize.ts). */
 const ACCENTS: Record<string, string[]> = {
@@ -42,8 +37,8 @@ const ACCENTS: Record<string, string[]> = {
 };
 const LONG_PRESS_MS = 350;
 const MIN_LENGTH = 4;
-/** Local cache of the progress, per account (the reference copy is in Supabase). */
-let storageKey = 'jeu-mots-progress-v1';
+/** On this device only: puzzles whose solution the player chose to reveal. */
+let revealedKey = 'enigmot-revealed';
 
 // ---------- points ----------
 
@@ -77,67 +72,154 @@ const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) 
 
 // ---------- state ----------
 
-let puzzles: Puzzle[] = [];
-let index = 0;
+let days: Day[] = []; // days that are out, up to the player's today
+let schedule: Day[] = []; // days the server lists (may include tomorrow for players behind UTC+14)
+let dayIndex = 0; // position in `days`
+let current: PuzzleState; // the open puzzle (letters, counts)
+let letters: string[] = []; // central first
+let newDayPending = false; // midnight passed while playing an older puzzle
 let outer: string[] = []; // the 6 outer letters, in display order
 let word: string[] = []; // typed characters (may be accented)
 let found = new Set<string>();
+let pangramsFound = new Set<string>();
+let families = new Map<number, Family>(); // families the player found, by id
 let points = 0;
-let wordSet = new Set<string>();
-let familiesOf = new Map<string, Family[]>(); // word → its families
-let unaccented = new Map<string, string>(); // stripped form → a real word, for the accent hint
 let panel: { family: Family; streak: number } | null = null;
+let solution: Solution | undefined; // only after "Révéler la solution"
+let busy = false; // a word is being checked
+const hints = new Hints();
 
-const puzzle = (): Puzzle => puzzles[index];
-const puzzleKey = (p: Puzzle): string => `${p.central}:${[...p.letters].sort().join('')}`;
-const isFound = (f: Family): boolean => f.forms.some((w) => found.has(w));
-const formsFound = (f: Family): number => f.forms.filter((w) => found.has(w)).length;
-const isVerb = (f: Family): boolean => !!f.tenses && f.forms.length > 1;
+const central = (): string => letters[0];
+const isFound = (f: Family): boolean => f.forms.some((x) => x.w !== null && found.has(x.w));
+const formsFound = (f: Family): number => f.forms.filter((x) => x.w !== null && found.has(x.w)).length;
+const isVerb = (f: Family): boolean => f.forms.length > 1 && f.forms.some((x) => x.tenses.length > 0);
 const byWord = (a: string, b: string): number => a.localeCompare(b, 'fr');
 
-// ---------- storage: local cache + Supabase ----------
+// ---------- reveal flag (this device only) ----------
 
-function loadAll(): Record<string, Progress> {
+function revealedSet(): Set<string> {
   try {
-    return JSON.parse(localStorage.getItem(storageKey) ?? '{}');
+    return new Set(JSON.parse(localStorage.getItem(revealedKey) ?? '[]') as string[]);
   } catch {
-    return {};
+    return new Set();
   }
 }
 
-function saveLocal(): void {
+function markRevealed(key: string, on: boolean): void {
   try {
-    const all = loadAll();
-    all[puzzleKey(puzzle())] = { found: [...found], points };
-    all.__index = { found: [String(index)] };
-    localStorage.setItem(storageKey, JSON.stringify(all));
+    const set = revealedSet();
+    if (on) set.add(key);
+    else set.delete(key);
+    localStorage.setItem(revealedKey, JSON.stringify([...set]));
   } catch {
-    /* storage unavailable: the cloud copy is still saved */
+    /* not kept */
   }
 }
 
-function save(): void {
-  saveLocal();
-  saveProgress(puzzleKey(puzzle()), { found: [...found], points });
+const isRevealed = (): boolean => revealedSet().has(current.puzzle_key);
+
+// ---------- days ----------
+
+/** Today's date in the player's time zone, as YYYY-MM-DD: the puzzle changes at local midnight. */
+const today = (): string => new Date().toLocaleDateString('en-CA');
+
+function dayLabel(d: Day): string {
+  if (d.date === today()) return `Aujourd’hui · n°${d.number}`;
+  const date = new Date(`${d.date}T12:00:00`).toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
+  return `n°${d.number} · ${date}`;
 }
 
-/** Merge the cloud copy into the open puzzle (words found on another device). */
-async function syncFromCloud(key: string): Promise<void> {
-  const remote = await loadProgress(key);
-  if (!remote || puzzleKey(puzzle()) !== key) return; // switched puzzle meanwhile
-  const before = found.size;
-  for (const w of remote.found) if (wordSet.has(w)) found.add(w);
-  const localOnly = found.size > remote.found.length || points > remote.points;
-  points = Math.max(points, remote.points);
-  if (found.size !== before) {
-    renderLists();
-    renderPanel();
+/** Recompute the playable days and the picker. Returns true if a new day appeared. */
+function refreshDays(): boolean {
+  const before = days.length;
+  days = schedule.filter((d) => d.date <= today());
+  const picker = $<HTMLSelectElement>('picker');
+  // Newest first: today at the top of the list.
+  picker.replaceChildren(
+    ...days
+      .map((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = dayLabel(d);
+        return opt;
+      })
+      .reverse(),
+  );
+  if (current) picker.value = String(dayIndex);
+  renderNav();
+  return before > 0 && days.length > before;
+}
+
+function renderNav(): void {
+  $<HTMLButtonElement>('prev').disabled = dayIndex <= 0;
+  $<HTMLButtonElement>('next').disabled = dayIndex >= days.length - 1;
+  if (days[dayIndex]?.date === days.at(-1)?.date) newDayPending = false;
+  $('new-day').hidden = !newDayPending;
+}
+
+/** Wake up at the next local midnight (plus a second) to show the new puzzle. */
+function scheduleMidnight(): void {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+  setTimeout(() => {
+    void onNewDayCheck();
+    scheduleMidnight();
+  }, next.getTime() - now.getTime());
+}
+
+async function onNewDayCheck(): Promise<void> {
+  // The list may not include today yet if it was loaded before the day started everywhere.
+  if (!schedule.some((d) => d.date === today())) {
+    try {
+      schedule = await listDays();
+    } catch {
+      return; // offline: try again later
+    }
   }
-  saveLocal();
-  if (localOnly) saveProgress(key, { found: [...found], points }); // words found offline
+  if (refreshDays()) {
+    newDayPending = true;
+    renderNav();
+    playWord(1);
+    showMessage('Nouveau puzzle disponible !', 'good');
+  }
 }
 
-// ---------- puzzle switching ----------
+async function openDay(i: number): Promise<void> {
+  const target = Math.min(Math.max(i, 0), days.length - 1);
+  let state: PuzzleState;
+  try {
+    await flush(); // the previous puzzle's points first
+    state = await getPuzzle(days[target].date);
+  } catch {
+    showMessage('Impossible de charger ce puzzle. Vérifiez votre connexion.', 'bad');
+    if (current) $<HTMLSelectElement>('picker').value = String(dayIndex);
+    return;
+  }
+  dayIndex = target;
+  current = state;
+  letters = [...state.letters];
+  outer = letters.slice(1);
+  word = [];
+  panel = null;
+  solution = undefined;
+  found = new Set(state.found);
+  pangramsFound = new Set(state.pangrams_found);
+  families = new Map(state.families.map((f) => [f.id, f]));
+  points = state.points;
+  $<HTMLSelectElement>('picker').value = String(dayIndex);
+  renderNav();
+  $('solutions').hidden = true;
+  renderRevealButton();
+  hints.reset();
+  renderHint();
+  showMessage('');
+  renderWheel();
+  renderWord();
+  renderLists();
+  renderPanel();
+}
+
+// ---------- rendering ----------
 
 function shuffle<T>(items: T[]): T[] {
   const a = [...items];
@@ -148,39 +230,12 @@ function shuffle<T>(items: T[]): T[] {
   return a;
 }
 
-function openPuzzle(i: number): void {
-  index = (i + puzzles.length) % puzzles.length;
-  const p = puzzle();
-  outer = p.letters.slice(1);
-  word = [];
-  panel = null;
-  wordSet = new Set(p.words);
-  familiesOf = new Map();
-  for (const f of p.families) for (const w of f.forms) familiesOf.set(w, [...(familiesOf.get(w) ?? []), f]);
-  unaccented = new Map(p.words.map((w) => [stripAccents(w), w]));
-  const saved = loadAll()[puzzleKey(p)];
-  found = new Set([...(saved?.found ?? []), ...(saved?.bonus ?? [])].filter((w) => wordSet.has(w)));
-  points = saved?.points ?? [...found].reduce((sum, w) => sum + wordPoints(w) + (p.pangrams.includes(w) ? PANGRAM_BONUS : 0), 0);
-  $<HTMLSelectElement>('picker').value = String(index);
-  $<HTMLDetailsElement>('solutions').open = false;
-  showMessage('');
-  saveLocal();
-  renderWheel();
-  renderWord();
-  renderLists();
-  renderPanel();
-  void syncFromCloud(puzzleKey(p));
-}
-
-// ---------- rendering ----------
-
 function renderWheel(): void {
   const wheel = $('wheel');
   wheel.replaceChildren();
-  const p = puzzle();
-  const place = (letter: string, x: number, y: number, central: boolean) => {
+  const place = (letter: string, x: number, y: number, isCentral: boolean) => {
     const btn = document.createElement('button');
-    btn.className = 'letter' + (central ? ' central' : '');
+    btn.className = 'letter' + (isCentral ? ' central' : '');
     btn.textContent = letter;
     btn.style.left = `${x}%`;
     btn.style.top = `${y}%`;
@@ -193,7 +248,7 @@ function renderWheel(): void {
     attachPress(btn, letter);
     wheel.append(btn);
   };
-  place(p.central, 50, 50, true);
+  place(central(), 50, 50, true);
   outer.forEach((letter, k) => {
     const angle = (k * 60 - 90) * (Math.PI / 180);
     place(letter, 50 + 35 * Math.cos(angle), 50 + 35 * Math.sin(angle), false);
@@ -201,18 +256,17 @@ function renderWheel(): void {
 }
 
 function renderWord(): void {
-  const el = $('word');
-  el.replaceChildren();
-  const central = puzzle().central;
+  const node = $('word');
+  node.replaceChildren();
   for (const ch of word) {
     const span = document.createElement('span');
     span.textContent = ch;
-    if (stripAccents(ch) === central) span.className = 'c';
-    el.append(span);
+    if (stripAccents(ch) === central()) span.className = 'c';
+    node.append(span);
   }
   const caret = document.createElement('span');
   caret.className = 'caret';
-  el.append(caret);
+  node.append(caret);
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = ''): HTMLElementTagNameMap[K] {
@@ -224,34 +278,29 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = ''):
 
 /** Family name as shown: the lemma, or "found form (lemma)" when the lemma can't be spelled here (aura → avoir). */
 function familyLabel(f: Family): string {
-  if (wordSet.has(f.lemma)) return f.lemma;
-  const first = f.forms.find((w) => found.has(w)) ?? f.forms[0];
+  if (f.playable) return f.lemma;
+  const first = f.forms.find((x) => x.w !== null && found.has(x.w))?.w ?? f.forms.find((x) => x.w)?.w ?? '';
   return `${first} (${f.lemma})`;
 }
 
 function renderLists(): void {
-  const p = puzzle();
-  const pangrams = new Set(p.pangrams);
-  const goals = p.families.filter((f) => f.goal);
-  const goalsFound = goals.filter(isFound).length;
-  const familiesFound = p.families.filter(isFound);
+  const familiesFound = [...families.values()].filter(isFound);
+  const goalsFound = familiesFound.filter((f) => f.goal).length;
 
   $('count').textContent = String(familiesFound.length);
-  $('goal').textContent = `objectif ${goalsFound} / ${goals.length}`;
+  $('goal').textContent = `objectif ${goalsFound} / ${current.goal_count}`;
   $('points').textContent = `${points} pts`;
-  $('bar-fill').style.width = `${(100 * goalsFound) / goals.length}%`;
-  const pangramsFound = p.pangrams.filter((w) => found.has(w)).length;
+  $('bar-fill').style.width = `${(100 * goalsFound) / Math.max(1, current.goal_count)}%`;
   const status = $('pangram-status');
-  status.textContent = `pangramme${p.pangrams.length > 1 ? 's' : ''} ${pangramsFound} / ${p.pangrams.length}`;
-  status.classList.toggle('done', pangramsFound > 0);
+  status.textContent = `pangramme${current.pangram_count > 1 ? 's' : ''} ${pangramsFound.size} / ${current.pangram_count}`;
+  status.classList.toggle('done', pangramsFound.size > 0);
 
-  // Found families, most recent first would need timestamps: keep alphabetical.
   $('found').replaceChildren(
     ...familiesFound
       .sort((a, b) => byWord(familyLabel(a), familyLabel(b)))
       .map((f) => {
         const li = el('li', familyLabel(f));
-        if (f.forms.some((w) => found.has(w) && pangrams.has(w))) li.classList.add('pangram');
+        if (f.forms.some((x) => x.w !== null && pangramsFound.has(x.w))) li.classList.add('pangram');
         if (f.forms.length > 1) {
           li.append(el('small', ` ${formsFound(f)}/${f.forms.length}`));
           li.classList.add('open');
@@ -260,18 +309,28 @@ function renderLists(): void {
         return li;
       }),
   );
+  renderSolution();
+}
 
-  const solution = (f: Family) => {
+function renderSolution(): void {
+  if (!solution) {
+    $('solution-goals').replaceChildren();
+    $('solution-extras').replaceChildren();
+    return;
+  }
+  const pangrams = new Set(solution.pangrams);
+  const item = (f: Family) => {
     const li = el('li', '', isFound(f) ? '' : 'missing');
     li.append(el('b', f.lemma), ' ');
-    f.forms.forEach((w, k) => {
+    f.forms.forEach((x, k) => {
+      const w = x.w ?? '';
       li.append(el('span', w, [found.has(w) ? 'got' : '', pangrams.has(w) ? 'pangram' : ''].join(' ').trim()));
       if (k < f.forms.length - 1) li.append(', ');
     });
     return li;
   };
-  $('solution-goals').replaceChildren(...goals.map(solution));
-  $('solution-extras').replaceChildren(...p.families.filter((f) => !f.goal).map(solution));
+  $('solution-goals').replaceChildren(...solution.families.filter((f) => f.goal).map(item));
+  $('solution-extras').replaceChildren(...solution.families.filter((f) => !f.goal).map(item));
 }
 
 // ---------- conjugation panel ----------
@@ -286,11 +345,11 @@ function closePanel(): void {
   renderPanel();
 }
 
-/** One slot per distinct form of a tense, labeled with its persons ("je, il"). */
-function slot(form: string, label: string): HTMLElement {
+/** One slot per distinct form of a tense, labeled with its persons ("je, il"). Unfound = dots (length). */
+function slot(form: Form, label: string): HTMLElement {
   const s = el('span', '', 'slot');
   if (label) s.append(el('i', label));
-  s.append(found.has(form) ? el('b', form) : el('b', '·'.repeat([...form].length), 'blank'));
+  s.append(form.w !== null && found.has(form.w) ? el('b', form.w) : el('b', '·'.repeat(form.len), 'blank'));
   return s;
 }
 
@@ -313,32 +372,32 @@ function renderPanel(): void {
   head.append(close);
 
   const rows: HTMLElement[] = [];
-  const placed = new Set<string>();
+  const placed = new Set<number>(); // form indexes
   for (const [mood, name] of TENSES) {
-    const forms = new Map<string, string[]>(); // form → persons
-    for (const w of f.forms) {
-      for (const code of f.tenses?.[w] ?? []) {
+    const forms = new Map<number, string[]>(); // form index → persons
+    f.forms.forEach((form, i) => {
+      for (const code of form.tenses) {
         const [m, person] = code.split(':');
         if (m !== mood) continue;
-        forms.set(w, [...(forms.get(w) ?? []), ...(person ? [person] : [])]);
+        forms.set(i, [...(forms.get(i) ?? []), ...(person ? [person] : [])]);
       }
-    }
+    });
     if (!forms.size) continue;
     const first = (ps: string[]) => Math.min(...ps.map((x) => PERSON_ORDER.indexOf(x)), 99);
     const row = el('div', '', 'tense');
     row.append(el('span', name, 'tense-name'));
     [...forms]
-      .sort((a, b) => first(a[1]) - first(b[1]) || byWord(a[0], b[0]))
-      .forEach(([w, ps]) => {
-        placed.add(w);
-        row.append(slot(w, ps.map((x) => PERSONS[x]).join(', ')));
+      .sort((a, b) => first(a[1]) - first(b[1]) || a[0] - b[0])
+      .forEach(([i, ps]) => {
+        placed.add(i);
+        row.append(slot(f.forms[i], ps.map((x) => PERSONS[x]).join(', ')));
       });
     rows.push(row);
   }
-  const others = f.forms.filter((w) => !placed.has(w));
+  const others = f.forms.filter((_, i) => !placed.has(i));
   if (others.length) {
     const row = el('div', '', 'tense');
-    row.append(el('span', f.tenses ? 'Autres formes' : 'Formes', 'tense-name'), ...others.map((w) => slot(w, '')));
+    row.append(el('span', isVerb(f) ? 'Autres formes' : 'Formes', 'tense-name'), ...others.map((x) => slot(x, '')));
     rows.push(row);
   }
   box.replaceChildren(head, ...rows);
@@ -375,10 +434,10 @@ function deleteChar(): void {
   renderWord();
 }
 
-function submit(): void {
-  if (word.length === 0) return;
+async function submit(): Promise<void> {
+  if (word.length === 0 || busy) return;
   const w = normalize(word.join(''));
-  const p = puzzle();
+  const date = current.date;
   word = [];
   renderWord();
 
@@ -390,17 +449,38 @@ function submit(): void {
     playMiss();
   };
   if ([...w].length < MIN_LENGTH) return fail(`Trop court (${MIN_LENGTH} lettres minimum)`);
-  if (!stripAccents(w).includes(p.central)) return fail(`Il manque la lettre centrale ${p.central.toUpperCase()}`);
+  if (!stripAccents(w).includes(central())) return fail(`Il manque la lettre centrale ${central().toUpperCase()}`);
   if (found.has(w)) return showMessage('Déjà trouvé');
-  if (!wordSet.has(w)) {
-    return fail(unaccented.has(stripAccents(w)) ? 'Presque : vérifiez les accents' : `« ${w} » n’est pas dans le dictionnaire`);
+
+  busy = true;
+  let result: SubmitResult;
+  try {
+    result = await submitWord(date, w);
+  } catch {
+    busy = false;
+    return fail('Connexion perdue : le mot n’a pas pu être vérifié');
+  }
+  busy = false;
+  if (current.date !== date) return; // switched puzzle meanwhile
+
+  if (result.status === 'unknown') return fail(`« ${w} » n’est pas dans le dictionnaire`);
+  if (result.status === 'almost') return fail('Presque : vérifiez les accents');
+
+  const isNew = result.families.some((f) => !families.has(f.id));
+  const ids = result.families.map((f) => f.id);
+  const inPanel = panel !== null && ids.includes(panel.family.id);
+  for (const f of result.families) families.set(f.id, f);
+  if (panel) panel.family = families.get(panel.family.id) ?? panel.family;
+  found.add(result.word);
+  if (result.status === 'already') {
+    renderLists();
+    return showMessage('Déjà trouvé');
   }
 
-  const families = familiesOf.get(w) ?? [];
-  const isNew = families.some((f) => !isFound(f));
-  const pangram = p.pangrams.includes(w);
-  const inPanel = panel && families.includes(panel.family);
-  found.add(w);
+  const pangram = result.pangram;
+  if (pangram) pangramsFound.add(result.word);
+  const returned = result.families.map((f) => families.get(f.id)!);
+  const hintSolved = isNew && hints.wordFound(ids);
 
   let gained: number;
   let text: string;
@@ -412,23 +492,26 @@ function submit(): void {
     gained = isNew ? wordPoints(w) : formPoints(1);
     text = isNew ? `Bravo : ${w}` : `Autre forme : ${w}`;
     // Open the conjugation panel on the verb with the most forms left to find.
-    const verb = families.filter(isVerb).sort((a, b) => b.forms.length - formsFound(b) - (a.forms.length - formsFound(a)))[0];
-    panel = verb && formsFound(verb) < verb.forms.length ? { family: verb, streak: 1 } : null;
+    const left = (f: Family) => f.forms.length - formsFound(f);
+    const verb = returned.filter(isVerb).sort((a, b) => left(b) - left(a))[0];
+    panel = verb && left(verb) > 0 ? { family: verb, streak: 1 } : null;
   }
   if (pangram) {
     gained += PANGRAM_BONUS;
     text = `Pangramme ! ${w}`;
   }
-  for (const f of families) {
+  for (const f of returned) {
     if (f.forms.length > 1 && formsFound(f) === f.forms.length) {
       gained += COMPLETE_BONUS;
       text = `${familyLabel(f)} : toutes les formes !`;
     }
   }
+  if (hintSolved) text = `Indice trouvé : ${w}`;
   points += gained;
-  save();
+  savePoints(date, points);
   renderLists();
   renderPanel();
+  renderHint();
   showMessage(`${text}  +${gained}`, 'good');
   bump($('points'));
   if (pangram) {
@@ -437,6 +520,99 @@ function submit(): void {
   } else {
     playWord(inPanel && panel ? panel.streak : 1);
   }
+}
+
+// ---------- hints ----------
+
+/** Whether there's anything left to hint (some family not found yet). */
+const hintable = (): boolean => current !== undefined && families.size < current.family_count;
+
+async function useHint(): Promise<void> {
+  const req = hints.request();
+  if (!req || !hintable()) return;
+  const date = current.date;
+  $<HTMLButtonElement>('hint-btn').disabled = true;
+  try {
+    const h = await getHint(date, req.family, req.letters);
+    if (current.date !== date) return;
+    if (!h) return renderHint();
+    hints.apply({ family: h.family, len: h.len, prefix: h.prefix });
+    playWord(1);
+  } catch {
+    showMessage('Connexion perdue : réessayez', 'bad');
+  }
+  renderHint();
+}
+
+const clock = (ms: number): string => {
+  const s = Math.ceil(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
+/** Hint card (letters shown + blanks) and the hint button's countdown. */
+function renderHint(): void {
+  const h = hints.hint;
+  const card = $('hint-card');
+  if (h) {
+    const shown = [...h.prefix];
+    const tiles = Array.from({ length: h.len }, (_, i) => el('span', shown[i] ?? '', i < shown.length ? 'tile shown' : 'tile'));
+    card.replaceChildren(el('span', 'Indice', 'hint-label'), el('span', '', 'tiles'), el('span', `${h.len} lettres`, 'hint-len'));
+    card.querySelector('.tiles')!.append(...tiles);
+    card.hidden = false;
+  } else {
+    card.hidden = true;
+  }
+
+  const btn = $<HTMLButtonElement>('hint-btn');
+  const wait = hints.wait();
+  const available = wait === 0 && hints.canGrow() && (h !== undefined || hintable());
+  btn.disabled = !available;
+  btn.classList.toggle('ready', available);
+  btn.querySelector('.hint-timer')!.textContent = available || !hints.canGrow() ? '' : clock(wait);
+  btn.setAttribute(
+    'aria-label',
+    available ? (h ? 'Indice : une lettre de plus' : 'Indice : première lettre d’un mot') : `Indice disponible dans ${clock(wait)}`,
+  );
+}
+
+// ---------- reveal ----------
+
+function renderRevealButton(): void {
+  const shown = !$('solutions').hidden;
+  $('reveal').textContent = shown ? 'Masquer la solution' : isRevealed() ? 'Afficher la solution' : 'Révéler la solution';
+}
+
+async function showSolution(): Promise<void> {
+  const date = current.date;
+  if (!solution) {
+    try {
+      const s = await revealSolution(date);
+      if (current.date !== date) return;
+      solution = s;
+    } catch {
+      return showMessage('Impossible de charger la solution. Vérifiez votre connexion.', 'bad');
+    }
+  }
+  renderSolution();
+  $('solutions').hidden = false;
+  renderRevealButton();
+  $('solutions').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function onReveal(): void {
+  if (!$('solutions').hidden) {
+    $('solutions').hidden = true;
+    renderRevealButton();
+  } else if (isRevealed()) {
+    void showSolution();
+  } else {
+    $<HTMLDialogElement>('confirm-reveal').showModal();
+  }
+}
+
+function confirmReveal(): void {
+  markRevealed(current.puzzle_key, true);
+  void showSolution();
 }
 
 /** Tap = base letter. Long press = accent picker (if the letter has accents). */
@@ -525,14 +701,14 @@ function highlightAccent(x: number, y: number): void {
 function onKey(e: KeyboardEvent): void {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.target instanceof HTMLSelectElement) return;
-  if (e.key === 'Enter') { e.preventDefault(); return submit(); }
+  if (e.key === 'Enter') { e.preventDefault(); return void submit(); }
   if (e.key === 'Backspace') { e.preventDefault(); return deleteChar(); }
   if (e.key === 'Escape') { closeAccents(); return closePanel(); }
   if ([...e.key].length !== 1) return;
   const ch = normalize(e.key);
   const base = stripAccents(ch);
   const allowed = base === ch || ACCENTS[base]?.includes(ch);
-  if (allowed && puzzle().letters.includes(base)) addChar(ch);
+  if (allowed && letters.includes(base)) addChar(ch);
 }
 
 const SPEAKER = '<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>';
@@ -550,18 +726,20 @@ function renderSoundButton(): void {
 
 async function init(): Promise<void> {
   const user = await requireUser();
-  storageKey = `jeu-mots-progress-v1:${user.id}`;
+  revealedKey = `enigmot-revealed:${user.id}`;
   $('account-email').textContent = user.email ?? '';
   $('signout').addEventListener('click', () => void signOut());
 
-  const res = await fetch('/data/puzzles.json');
-  if (!res.ok) {
-    showMessage('Puzzles introuvables : lancez npm run build:words puis npm run puzzles', 'bad');
+  try {
+    schedule = await listDays();
+  } catch (err) {
+    console.error(err);
+    showMessage('Impossible de charger les puzzles. Vérifiez votre connexion.', 'bad');
     return;
   }
-  puzzles = await res.json();
-  if (!puzzles[0]?.families) {
-    showMessage('Ancien format de puzzles : relancez npm run build:words puis npm run puzzles', 'bad');
+  refreshDays();
+  if (!days.length) {
+    showMessage('Le premier puzzle n’est pas encore sorti.', 'bad');
     return;
   }
 
@@ -572,26 +750,41 @@ async function init(): Promise<void> {
   });
 
   const picker = $<HTMLSelectElement>('picker');
-  picker.replaceChildren(
-    ...puzzles.map((p, i) => {
-      const opt = document.createElement('option');
-      opt.value = String(i);
-      opt.textContent = `Puzzle ${i + 1} — ${p.central.toUpperCase()} · ${p.letters.slice(1).join(' ').toUpperCase()}`;
-      return opt;
-    }),
-  );
-  picker.addEventListener('change', () => openPuzzle(Number(picker.value)));
-  $('prev').addEventListener('click', () => openPuzzle(index - 1));
-  $('next').addEventListener('click', () => openPuzzle(index + 1));
+  picker.addEventListener('change', () => void openDay(Number(picker.value)));
+  $('prev').addEventListener('click', () => void openDay(dayIndex - 1));
+  $('next').addEventListener('click', () => void openDay(dayIndex + 1));
+  $('new-day-btn').addEventListener('click', () => void openDay(days.length - 1));
+  scheduleMidnight();
+  // Timers sleep with the phone: check again when the game comes back on screen.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void onNewDayCheck();
+  });
   $('delete').addEventListener('click', deleteChar);
-  $('submit').addEventListener('click', submit);
+  $('submit').addEventListener('click', () => void submit());
   $('shuffle').addEventListener('click', () => { outer = shuffle(outer); renderWheel(); });
+  $('hint-btn').addEventListener('click', () => void useHint());
+  setInterval(renderHint, 1000);
+  $('reveal').addEventListener('click', onReveal);
+  const dialog = $<HTMLDialogElement>('confirm-reveal');
+  dialog.addEventListener('close', () => {
+    if (dialog.returnValue === 'ok') confirmReveal();
+  });
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) dialog.close('cancel'); // tap outside the card
+  });
   $('reset').addEventListener('click', () => {
+    void resetProgress(current.puzzle_key);
+    markRevealed(current.puzzle_key, false);
     found.clear();
+    pangramsFound.clear();
+    families.clear();
     points = 0;
     panel = null;
-    saveLocal();
-    void resetProgress(puzzleKey(puzzle()));
+    solution = undefined;
+    $('solutions').hidden = true;
+    renderRevealButton();
+    hints.reset();
+    renderHint();
     renderLists();
     renderPanel();
   });
@@ -600,8 +793,9 @@ async function init(): Promise<void> {
     if (!(e.target instanceof Element && e.target.closest('#accents, .letter'))) closeAccents();
   });
 
-  const last = Number(loadAll().__index?.found[0] ?? 0);
-  openPuzzle(Number.isInteger(last) && last < puzzles.length ? last : 0);
+  // Always start on today's puzzle (or the latest one if the schedule ran out).
+  if (days.at(-1)!.date !== today()) console.warn(`No puzzle scheduled for ${today()}`);
+  await openDay(days.length - 1);
 }
 
 init();

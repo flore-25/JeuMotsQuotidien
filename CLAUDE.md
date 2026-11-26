@@ -14,6 +14,18 @@
 - Every valid word earns points: a new family = 1 pt at 4 letters, else 1 pt per letter; an extra form of a found family = 1 pt × current streak; pangram +7 always; all forms of a family +5.
 - Finding a verb opens the conjugation panel (its forms in this puzzle, grouped by tense). Each consecutive form of that verb extends the streak; a miss resets it; another valid word closes the panel or opens its own verb.
 
+## Daily schedule
+- data/schedule.json (tracked) = one letter set per date, central first. Append-only: never edit or remove a date that has passed (progress is keyed by the letters).
+- `npm run schedule` appends days; `npm run puzzles` builds data/out/puzzles/<date>.json + index.json from it.
+- New days also follow: no letter set used twice; central letters spread out (least-used valid one preferred, none above 15 %).
+- A new puzzle appears at the player's local midnight; past puzzles stay playable, future ones are never served.
+
+## Private solutions (Supabase)
+- Solutions live only in the Supabase table `public.puzzles` (RLS on, no policy): never ship puzzle data (words, families) in dist/ or any static file.
+- The page only uses the functions in supabase/migrations/20261126000000_private_puzzles.sql: list_days, get_puzzle, submit_word (checks + saves a word), save_points, get_hint, reveal_solution. Found words are written only by submit_word; unfound forms are sent masked (length + tenses).
+- A day is served once it has started somewhere (UTC+14, `private.latest_date()`).
+- `npm run upload` pushes data/out/puzzles/ with SUPABASE_SECRET_KEY (Node only, build time; Vercel production builds only). The secret key must never be injected into the page.
+
 ## Spelling rules
 - Accents are part of the spelling: pêche, pèche and péché are 3 different words. "eleve" is not a word.
 - A puzzle letter covers its accented forms (E → e é è ê ë). The bitmask is computed from the unaccented letters.
@@ -47,5 +59,5 @@
 - TypeScript, Node 24 (runs .ts files directly via native type stripping; `npm run typecheck` for types). src/normalize.ts is the only source of normalization.
 - Never modify data/raw/.
 - Web: no bundler. `npm run dev` strips TypeScript on the fly; `npm run build` writes `dist/` (same stripping, `.ts` imports → `.js`). Browser-only deps load via the import map in web/index.html (pinned version, CDN); install the same version as a devDependency for types.
-- Hosting: Vercel (`vercel.json`). Accounts + progress: Supabase, account required. Config via env `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` (`.env.local` locally), injected into index.html by src/site-config.ts. Only the publishable key ever reaches the browser; data is protected by RLS.
-- Database changes go in a new file in supabase/migrations/ (never edit an applied migration). Progress saves go through `save_progress()`, which merges (union of words, max points).
+- Hosting: Vercel (`vercel.json`). Accounts, progress and puzzles: Supabase, account required. Config via env `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` (`.env.local` locally), injected into index.html by src/site-config.ts. Only the publishable key ever reaches the browser; data is protected by RLS and functions.
+- Database changes go in a new file in supabase/migrations/ (never edit an applied migration). Found words are saved by `submit_word()`; points by `save_points()` (max).

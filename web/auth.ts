@@ -12,7 +12,8 @@ import { createClient, type AuthError, type SupabaseClient, type User } from '@s
 const meta = (name: string): string => document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`)?.content ?? '';
 const url = meta('supabase-url');
 const key = meta('supabase-key');
-export const configured = /^https:\/\//.test(url) && key.length > 20 && !key.startsWith('%');
+// https in production; http only for a local Supabase (`supabase start` runs on 127.0.0.1).
+export const configured = /^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(url) && key.length > 20 && !key.startsWith('%');
 
 export const supabase: SupabaseClient | undefined = configured ? createClient(url, key) : undefined;
 

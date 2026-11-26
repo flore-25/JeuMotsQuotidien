@@ -10,17 +10,16 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:words": "node src/build-words.ts",
-    "puzzles": "node src/generate-puzzles.ts",
+    "puzzles": "node src/generate-puzzles.ts build",
     "dev": "node --env-file-if-exists=.env.local src/serve.ts",
     "build": "node src/build-site.ts",
-    "preview": "node --env-file-if-exists=.env.local src/build-site.ts && npx --yes serve@14.2.4 dist"
+    "preview": "node --env-file-if-exists=.env.local src/build-site.ts && npx --yes serve@14.2.4 dist",
+    "schedule": "node src/generate-puzzles.ts schedule",
+    "upload": "node --env-file-if-exists=.env.local src/upload-puzzles.ts"
   },
   "devDependencies": {
-    "@supabase/supabase-js": "^2.118.0",
+    "@supabase/supabase-js": "2.118.0",
     "@types/node": "^24.19.2",
     "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "@supabase/ssr": "^0.12.7"
   }
 }

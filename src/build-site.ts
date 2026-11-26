@@ -8,14 +8,13 @@
  * the environment (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY).
  */
 
-import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { stripTypeScriptTypes } from 'node:module';
 import { fillConfig } from './site-config.ts';
 
 const ROOT = join(import.meta.dirname, '..');
 const DIST = join(ROOT, 'dist');
-const PUZZLES = join(ROOT, 'data/out/puzzles.json');
 
 /** Browser modules: everything in web/, plus the shared normalization used by the page. */
 const MODULES = [...readdirSync(join(ROOT, 'web')).filter((f) => f.endsWith('.ts')).map((f) => `web/${f}`), 'src/normalize.ts'];
@@ -27,7 +26,6 @@ function write(rel: string, content: string | Buffer): void {
 }
 
 function main(): void {
-  if (!existsSync(PUZZLES)) throw new Error('data/out/puzzles.json is missing: run `npm run build:words && npm run puzzles` first.');
   // Check the config before touching dist/, so a failed build leaves the previous one intact.
   const html = fillConfig(readFileSync(join(ROOT, 'web/index.html'), 'utf8'), { required: true })
     .replace('src="/web/app.ts"', 'src="/web/app.js"');
@@ -42,10 +40,10 @@ function main(): void {
   }
 
   cpSync(join(ROOT, 'web/style.css'), join(DIST, 'web/style.css'));
-  for (const f of readdirSync(join(ROOT, 'branding')).filter((f) => f.endsWith('.svg'))) {
+  for (const f of readdirSync(join(ROOT, 'branding')).filter((f) => /\.(svg|png)$/.test(f))) {
     cpSync(join(ROOT, 'branding', f), join(DIST, 'branding', f));
   }
-  cpSync(PUZZLES, join(DIST, 'data/puzzles.json'));
+  // No puzzle data in the site: puzzles and solutions stay in Supabase (src/upload-puzzles.ts).
 
   const files = readdirSync(DIST, { recursive: true }).filter((f) => /\.\w+$/.test(String(f)));
   console.log(`built dist/: ${files.length} files (${MODULES.length} modules)`);

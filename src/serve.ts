@@ -4,7 +4,7 @@
  *   npm run dev   →   http://localhost:5173
  *
  * Serves web/, branding/, src/ (TypeScript stripped to JavaScript on the fly, so the page uses
- * the same src/normalize.ts as the build) and data/out/puzzles.json.
+ * the same src/normalize.ts as the build). Puzzles come from Supabase (npm run upload), not from here.
  * Supabase settings come from .env.local (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY), see README.
  */
 
@@ -17,11 +17,13 @@ import { fillConfig } from './site-config.ts';
 const ROOT = join(import.meta.dirname, '..');
 const PORT = Number(process.env.PORT ?? 5173);
 
-const SERVED_DIRS = ['web', 'src', 'branding'];
-const FIXED: Record<string, string> = {
-  '/': 'web/index.html',
-  '/data/puzzles.json': 'data/out/puzzles.json',
+/** URL prefix → folder under ROOT. */
+const SERVED_DIRS: Record<string, string> = {
+  '/web/': 'web',
+  '/src/': 'src',
+  '/branding/': 'branding',
 };
+const FIXED: Record<string, string> = { '/': 'web/index.html' };
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -30,15 +32,16 @@ const TYPES: Record<string, string> = {
   '.ts': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.png': 'image/png',
 };
 
 /** Map a URL path to a file under ROOT, or null if it is not served. */
 function fileFor(urlPath: string): string | null {
   if (FIXED[urlPath]) return join(ROOT, FIXED[urlPath]);
-  const dir = SERVED_DIRS.find((d) => urlPath.startsWith(`/${d}/`));
-  if (!dir) return null;
-  const base = join(ROOT, dir);
-  const file = resolve(base, '.' + decodeURIComponent(urlPath.slice(dir.length + 1)));
+  const prefix = Object.keys(SERVED_DIRS).find((p) => urlPath.startsWith(p));
+  if (!prefix) return null;
+  const base = join(ROOT, SERVED_DIRS[prefix]);
+  const file = resolve(base, './' + decodeURIComponent(urlPath.slice(prefix.length)));
   return file.startsWith(base + sep) ? file : null; // no ../ escapes
 }
 
@@ -56,8 +59,7 @@ const server = createServer(async (req, res) => {
     if (urlPath === '/') body = fillConfig(body.toString('utf8'));
     res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' }).end(body);
   } catch {
-    const hint = urlPath === '/data/puzzles.json' ? ' (run `npm run build:words && npm run puzzles`)' : '';
-    res.writeHead(404).end(`Not found${hint}`);
+    res.writeHead(404).end('Not found');
   }
 });
 

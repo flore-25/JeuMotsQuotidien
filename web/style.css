@@ -72,11 +72,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .brand { display: flex; align-items: center; justify-content: center; position: relative; padding: 4px 0 2px; }
 .logo { margin: 0; line-height: 0; width: min(200px, 54vw); }
 .logo img { width: 100%; height: auto; display: block; }
-/* The logo's ink would vanish on the dark background: in dark mode it sits on a beige sticker. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .logo { background: var(--beige); border-radius: 14px; padding: 6px 12px 4px; box-shadow: 3px 3px 0 #000; }
-}
-:root[data-theme="dark"] .logo { background: var(--beige); border-radius: 14px; padding: 6px 12px 4px; box-shadow: 3px 3px 0 #000; }
 .brand > .icon-btn { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
 .brand > .account { position: absolute; left: 0; top: 50%; transform: translateY(-50%); }
 
@@ -196,8 +191,11 @@ h2 { font: 800 17px/1.2 var(--display); font-variation-settings: "SOFT" 100; mar
 .chips li small { color: var(--muted); }
 .chips:empty::after { content: "Aucun mot pour l’instant"; color: var(--muted); font-size: 14px; }
 
-#solutions { margin-top: 24px; border-top: 1.5px dashed var(--muted); padding-top: 12px; }
-summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.reveal { margin-top: 24px; border-top: 1.5px dashed var(--muted); padding-top: 4px; }
+#solutions[hidden] { display: none; }
+.reveal-bar { display: flex; justify-content: flex-end; margin-top: 8px; }
+.btn.small { padding: 4px 12px; font-size: 13px; border-width: 2px; box-shadow: 2px 2px 0 var(--shadow); }
+.btn.small:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--shadow); }
 .link { background: none; border: none; color: var(--fg); padding: 0; text-decoration: underline; margin-top: 12px; font-size: 14px; }
 
 .families { list-style: none; padding: 0; margin: 0; font-size: 14px; }
@@ -284,3 +282,42 @@ summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .auth-note.bad { background: var(--red); color: #fffaf3; border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px; }
 .auth-switch { text-align: center; font-size: 14px; color: var(--muted); margin: 14px 0 0; }
 .auth-switch .link { margin: 0 0 0 4px; font-size: 14px; }
+
+/* ---------- hints ---------- */
+
+.hint-btn { position: relative; }
+.hint-btn:disabled { opacity: .55; cursor: default; box-shadow: 1px 1px 0 var(--shadow); }
+.hint-btn.ready { background: var(--beige); color: var(--ink); animation: glow 1.6s ease-in-out infinite; }
+@keyframes glow { 50% { box-shadow: 3px 3px 0 var(--shadow), 0 0 0 5px color-mix(in srgb, var(--blue) 45%, transparent); } }
+.hint-timer {
+  position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap;
+}
+.hint-card { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 2px 0 4px; }
+.hint-card[hidden] { display: none; }
+.hint-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+.hint-len { font-size: 12px; color: var(--muted); }
+.tiles { display: flex; gap: 3px; }
+.tile {
+  width: 22px; height: 26px; display: grid; place-items: center;
+  border: 2px solid var(--line); border-radius: 5px; background: var(--surface);
+  font: 900 15px/1 var(--display); font-variation-settings: "SOFT" 100; text-transform: uppercase;
+}
+.tile.shown { background: var(--fg); color: var(--bg); animation: pop-in .3s cubic-bezier(.3, 1.6, .5, 1); }
+
+/* ---------- confirm dialog ---------- */
+
+.dialog { max-width: min(360px, calc(100vw - 32px)); padding: 18px 18px 16px; color: var(--fg); }
+.dialog::backdrop { background: rgb(25 22 19 / .55); }
+.dialog[open] { animation: pop-in .25s cubic-bezier(.3, 1.6, .5, 1); }
+.dialog h2 { margin: 0 0 8px; font-size: 21px; }
+.dialog p { margin: 0 0 16px; font-size: 15px; color: var(--muted); }
+.dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.btn.danger { background: var(--red); color: #fffaf3; }
+
+/* ---------- days ---------- */
+
+.puzzle-nav .icon-btn:disabled { opacity: .25; cursor: default; }
+.puzzle-nav .icon-btn:disabled:hover { background: none; }
+.new-day { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; padding: 8px 10px 8px 14px; font-weight: 500; font-size: 14px; }
+.new-day[hidden] { display: none; }
